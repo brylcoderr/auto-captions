@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Captions Generator | Premium Video Transcription</title>
+    <meta name="description" content="Generate precise, multi-language auto-captions for your videos using advanced AI." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Bebas+Neue&family=Bungee&family=Caveat:wght@400;700&family=Dancing+Script:wght@400;700&family=Fredoka:wght@400;600;700&family=Lexend:wght@300;400;500;600;700&family=Montserrat:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700;800&family=Pacifico&family=Permanent+Marker&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Poppins:wght@400;600;700;900&family=Righteous&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Keyboard Shortcuts Tooltip -->
+      <div id="shortcutsTooltip" class="shortcuts-tooltip" style="display: none;">
+        <h4>⌨️ Keyboard Shortcuts</h4>
+        <div class="shortcut-item"><kbd>Space</kbd> Play / Pause</div>
+        <div class="shortcut-item"><kbd>G</kbd> Generate Captions</div>
+        <div class="shortcut-item"><kbd>E</kbd> Export Video</div>
+        <div class="shortcut-item"><kbd>S</kbd> Export SRT</div>
+        <div class="shortcut-item"><kbd>R</kbd> Reset / Replace</div>
+        <div class="shortcut-item"><kbd>←</kbd><kbd>→</kbd> Seek ±5s</div>
+        <div class="shortcut-item"><kbd>↑</kbd><kbd>↓</kbd> Volume</div>
+        <div class="shortcut-item"><kbd>1-8</kbd> Quick Presets</div>
+        <div class="shortcut-item"><kbd>?</kbd> Toggle This Panel</div>
+      </div>
+
+      <header>
+        <div class="logo">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M7 8h10"></path><path d="M7 12h7"></path></svg>
+          CaptionPro AI
+        </div>
+        <div class="header-actions">
+          <button id="shortcutsBtn" class="btn btn-icon" title="Keyboard Shortcuts (?)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg>
+          </button>
+          <div id="apiStatus" class="text-muted" style="font-size: 0.875rem;">
+            <span style="color: #10b981;">●</span> AI Ready
+          </div>
+        </div>
+      </header>
+
+      <main class="main-container">
+        <!-- Left Column: Video & Preview -->
+        <section class="content-area">
+          <div id="uploadContainer" class="upload-area">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <h3>Upload your video</h3>
+            <p class="text-muted" style="margin-top: 0.5rem; margin-bottom: 1.5rem;">MP4, MOV, WebM, MP3, WAV (Max 25MB)</p>
+            <input type="file" id="videoUpload" accept="video/mp4, video/quicktime, video/webm, audio/mpeg, audio/wav, audio/mp4" aria-label="Upload video or audio for caption generation" style="display: none;" />
+            <button class="btn btn-secondary" style="width: auto; margin: 0 auto;" onclick="document.getElementById('videoUpload').click()">Choose File</button>
+            <p class="text-muted" style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.6;">or drag & drop a file here</p>
+          </div>
+
+          <div id="videoPreviewContainer" style="display: none;">
+            <div class="video-surface">
+              <video id="mainVideo" controls muted playsinline></video>
+              <div id="audioVisualizer" style="display: none; position: absolute; inset: 0; background: linear-gradient(135deg, #1e293b, #0f172a); align-items: center; justify-content: center; gap: 4px;">
+                <div class="visualizer-bar" style="height: 20%; width: 8px; background: var(--primary); border-radius: 4px;"></div>
+                <div class="visualizer-bar" style="height: 40%; width: 8px; background: var(--primary); border-radius: 4px;"></div>
+                <div class="visualizer-bar" style="height: 60%; width: 8px; background: var(--secondary); border-radius: 4px;"></div>
+                <div class="visualizer-bar" style="height: 45%; width: 8px; background: var(--primary); border-radius: 4px;"></div>
+                <div class="visualizer-bar" style="height: 25%; width: 8px; background: var(--primary); border-radius: 4px;"></div>
+              </div>
+              <div id="captionOverlay" class="caption-overlay">
+                <div id="captionContainer" class="caption-container">
+                  <span id="captionText"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <button id="generateBtn" class="btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Generate AI Captions
+              </button>
+              <button id="importSrtBtn" class="btn btn-secondary" style="width: auto;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import SRT
+              </button>
+              <input type="file" id="srtUpload" accept=".srt" style="display: none;">
+              <button id="resetBtn" class="btn btn-secondary" style="width: auto;">Replace Video</button>
+              <button id="exportBtn" class="btn btn-export-video" style="width: auto;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Video
+              </button>
+              <button id="exportSrtBtn" class="btn btn-export-srt" style="width: auto;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Export SRT
+              </button>
+            </div>
+
+            <div id="processingStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 12px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span id="statusLabel">Analyzing video...</span>
+                <span id="progressPercent">0%</span>
+              </div>
+              <div style="height: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 3px; overflow: hidden;">
+                <div id="progressBar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.3s ease;"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right Column: Tabbed Settings Panel -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <h2>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Customization
+            </h2>
+          </div>
+
+          <!-- Tab Navigation -->
+          <nav class="tab-nav" id="tabNav">
+            <button class="tab-btn active" data-tab="presets">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
+              Presets
+            </button>
+            <button class="tab-btn" data-tab="typography">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+              Text
+            </button>
+            <button class="tab-btn" data-tab="style">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M17 2H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10z"/><circle cx="12" cy="17.5" r="4.5"/></svg>
+              Style
+            </button>
+            <button class="tab-btn" data-tab="motion">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Motion
+            </button>
+            <button class="tab-btn" data-tab="transcript">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              Edit
+            </button>
+          </nav>
+
+          <!-- Tab Content -->
+          <div class="tab-content-wrapper">
+
+            <!-- ===== TAB: PRESETS ===== -->
+            <div class="tab-panel active" id="tab-presets">
+              <div class="presets-grid" id="presetsGrid">
+                <button class="preset-btn active" data-preset="default" title="Clean Default">
+                  <span class="preset-preview" style="font-family:'Outfit';font-weight:700;background:rgba(0,0,0,0.6);padding:3px 8px;border-radius:4px;">Aa</span>
+                  <span class="preset-label">Default</span>
+                </button>
+                <button class="preset-btn" data-preset="cinematic" title="Cinematic">
+                  <span class="preset-preview" style="font-family:'Playfair Display';font-style:italic;text-shadow:0 2px 8px rgba(0,0,0,0.8);">Aa</span>
+                  <span class="preset-label">Cinema</span>
+                </button>
+                <button class="preset-btn" data-preset="bold" title="Bold Impact">
+                  <span class="preset-preview" style="font-family:'Anton';text-transform:uppercase;color:#fbbf24;">AA</span>
+                  <span class="preset-label">Bold</span>
+                </button>
+                <button class="preset-btn" data-preset="neon" title="Neon Glow">
+                  <span class="preset-preview" style="font-family:'Bebas Neue';color:#22d3ee;text-shadow:0 0 10px #22d3ee;">Aa</span>
+                  <span class="preset-label">Neon</span>
+                </button>
+                <button class="preset-btn" data-preset="karaoke" title="Karaoke Style">
+                  <span class="preset-preview" style="font-family:'Poppins';font-weight:900;color:#f472b6;-webkit-text-stroke:1px #fff;">Aa</span>
+                  <span class="preset-label">Karaoke</span>
+                </button>
+                <button class="preset-btn" data-preset="retro" title="Retro VHS">
+                  <span class="preset-preview" style="font-family:'Bungee';color:#fb923c;letter-spacing:2px;">Aa</span>
+                  <span class="preset-label">Retro</span>
+                </button>
+                <button class="preset-btn" data-preset="handwritten" title="Handwritten">
+                  <span class="preset-preview" style="font-family:'Caveat';font-size:1.2em;font-weight:700;">Aa</span>
+                  <span class="preset-label">Script</span>
+                </button>
+                <button class="preset-btn" data-preset="news" title="News Lower Third">
+                  <span class="preset-preview" style="font-family:'Space Grotesk';font-weight:600;background:linear-gradient(135deg,#dc2626,#991b1b);padding:2px 8px;border-radius:2px;font-size:0.8em;">Aa</span>
+                  <span class="preset-label">News</span>
+                </button>
+              </div>
+
+              <!-- Creator Presets -->
+              <div class="section-group" style="margin-top: 0.75rem;">
+                <h3 class="section-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  Creator Styles
+                </h3>
+                <div class="presets-grid creator-presets" id="creatorPresetsGrid">
+                  <button class="preset-btn creator" data-preset="mrbeast" title="MrBeast Style — Bold word-by-word">
+                    <span class="preset-preview" style="font-family:'Montserrat';font-weight:900;text-transform:uppercase;-webkit-text-stroke:2px #000;font-size:1.1em;">AB</span>
+                    <span class="preset-label">MrBeast</span>
+                  </button>
+                  <button class="preset-btn creator" data-preset="hormozi" title="Alex Hormozi Style — Bold with highlight">
+                    <span class="preset-preview" style="font-family:'Montserrat';font-weight:800;text-transform:uppercase;background:rgba(0,0,0,0.85);padding:2px 6px;border-radius:3px;font-size:0.85em;">AB</span>
+                    <span class="preset-label">Hormozi</span>
+                  </button>
+                  <button class="preset-btn creator" data-preset="aliabdaal" title="Ali Abdaal Style — Clean minimal">
+                    <span class="preset-preview" style="font-family:'Lexend';font-weight:500;background:rgba(30,41,59,0.75);padding:2px 8px;border-radius:8px;font-size:0.85em;">Aa</span>
+                    <span class="preset-label">Abdaal</span>
+                  </button>
+                  <button class="preset-btn creator" data-preset="mkbhd" title="MKBHD Style — Clean tech aesthetic">
+                    <span class="preset-preview" style="font-family:'Space Grotesk';font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.9);font-size:0.9em;">Aa</span>
+                    <span class="preset-label">MKBHD</span>
+                  </button>
+                  <button class="preset-btn creator" data-preset="casey" title="Casey Neistat Style — Big bold vlog">
+                    <span class="preset-preview" style="font-family:'Bebas Neue';text-transform:uppercase;letter-spacing:3px;font-size:1.1em;">AA</span>
+                    <span class="preset-label">Casey</span>
+                  </button>
+                  <button class="preset-btn creator" data-preset="tiktok" title="Viral TikTok Style — Bold with cyan highlight">
+                    <span class="preset-preview" style="font-family:'Poppins';font-weight:900;-webkit-text-stroke:1px #000;color:#00f2ea;text-transform:uppercase;font-size:0.9em;">Aa</span>
+                    <span class="preset-label">TikTok</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- AI Enhancements lives here too since it's short -->
+              <div class="section-group" style="margin-top: 0.75rem;">
+                <h3 class="section-title">AI Enhancements</h3>
+                <label class="checkbox-row"><input type="checkbox" id="speekDiarization"><span>Speaker Diarization</span></label>
+                <label class="checkbox-row"><input type="checkbox" id="noiseReduction" checked><span>Noise Reduction</span></label>
+                <label class="checkbox-row"><input type="checkbox" id="soundLabels"><span>Accessibility Labels</span></label>
+              </div>
+            </div>
+
+            <!-- ===== TAB: TYPOGRAPHY ===== -->
+            <div class="tab-panel" id="tab-typography">
+              <div class="section-group">
+                <div class="input-row">
+                  <label>Preset Fonts</label>
+                  <select id="fontFamily">
+                    <optgroup label="Sans Serif">
+                      <option value="'Outfit', sans-serif">Outfit (Default)</option>
+                      <option value="'Lexend', sans-serif">Lexend</option>
+                      <option value="'Montserrat', sans-serif">Montserrat</option>
+                      <option value="'Poppins', sans-serif">Poppins</option>
+                      <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+                      <option value="'Inter', sans-serif">Inter</option>
+                      <option value="'Fredoka', sans-serif">Fredoka</option>
+                    </optgroup>
+                    <optgroup label="Display & Impact">
+                      <option value="'Anton', sans-serif">Anton</option>
+                      <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+                      <option value="'Bungee', sans-serif">Bungee</option>
+                      <option value="'Bangers', cursive">Bangers</option>
+                      <option value="'Righteous', cursive">Righteous</option>
+                      <option value="'Permanent Marker', cursive">Permanent Marker</option>
+                    </optgroup>
+                    <optgroup label="Script & Handwritten">
+                      <option value="'Caveat', cursive">Caveat</option>
+                      <option value="'Dancing Script', cursive">Dancing Script</option>
+                      <option value="'Pacifico', cursive">Pacifico</option>
+                    </optgroup>
+                    <optgroup label="Serif">
+                      <option value="'Playfair Display', serif">Playfair Display</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div class="input-row">
+                  <label>Custom Google Font</label>
+                  <div style="display:flex;gap:0.5rem;">
+                    <input type="text" id="customFontName" placeholder="e.g. Lobster, Kanit">
+                    <button id="loadFontBtn" class="btn btn-secondary" style="width:auto;padding:0 10px;">Load</button>
+                  </div>
+                </div>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Size (px)</label>
+                    <input type="number" id="fontSize" value="24" min="10" max="120">
+                  </div>
+                  <div class="input-row">
+                    <label>Weight</label>
+                    <select id="fontWeight">
+                      <option value="300">Light</option>
+                      <option value="400">Normal</option>
+                      <option value="600">Semi Bold</option>
+                      <option value="700" selected>Bold</option>
+                      <option value="800">Extra Bold</option>
+                      <option value="900">Black</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="input-row">
+                  <label>Text Transform</label>
+                  <div class="segmented-control" id="textTransformControl">
+                    <button class="seg-btn active" data-value="none" title="None">Aa</button>
+                    <button class="seg-btn" data-value="uppercase" title="UPPERCASE">AA</button>
+                    <button class="seg-btn" data-value="lowercase" title="lowercase">aa</button>
+                    <button class="seg-btn" data-value="capitalize" title="Capitalize">Ab</button>
+                  </div>
+                </div>
+                <div class="input-row">
+                  <label>Font Style</label>
+                  <div class="segmented-control" id="fontStyleControl">
+                    <button class="seg-btn active" data-value="normal" title="Normal">Normal</button>
+                    <button class="seg-btn" data-value="italic" title="Italic" style="font-style:italic;">Italic</button>
+                  </div>
+                </div>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Letter Spacing: <span id="letterSpacingValue">0</span>px</label>
+                    <input type="range" id="letterSpacing" min="-5" max="20" step="0.5" value="0">
+                  </div>
+                  <div class="input-row">
+                    <label>Line Height: <span id="lineHeightValue">1.4</span></label>
+                    <input type="range" id="lineHeight" min="1" max="3" step="0.1" value="1.4">
+                  </div>
+                </div>
+                <div class="input-row">
+                  <label>Text Decoration</label>
+                  <select id="textDecoration">
+                    <option value="none">None</option>
+                    <option value="underline">Underline</option>
+                    <option value="underline wavy">Wavy Underline</option>
+                    <option value="overline">Overline</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== TAB: STYLE ===== -->
+            <div class="tab-panel" id="tab-style">
+              <div class="section-group">
+                <!-- Colors -->
+                <h3 class="section-title">Colors</h3>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Text Color</label>
+                    <div class="color-input-group">
+                      <input type="color" id="textColor" value="#ffffff">
+                      <div class="color-swatches" data-target="textColor">
+                        <button class="swatch" style="background:#ffffff" data-color="#ffffff"></button>
+                        <button class="swatch" style="background:#fbbf24" data-color="#fbbf24"></button>
+                        <button class="swatch" style="background:#22d3ee" data-color="#22d3ee"></button>
+                        <button class="swatch" style="background:#f472b6" data-color="#f472b6"></button>
+                        <button class="swatch" style="background:#4ade80" data-color="#4ade80"></button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="input-row">
+                    <label>Bg Color</label>
+                    <div class="color-input-group">
+                      <input type="color" id="bgColor" value="#000000">
+                      <div class="color-swatches" data-target="bgColor">
+                        <button class="swatch" style="background:#000000" data-color="#000000"></button>
+                        <button class="swatch" style="background:#1e293b" data-color="#1e293b"></button>
+                        <button class="swatch" style="background:#7c3aed" data-color="#7c3aed"></button>
+                        <button class="swatch" style="background:#dc2626" data-color="#dc2626"></button>
+                        <button class="swatch" style="background:#059669" data-color="#059669"></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="input-row">
+                  <label>Bg Opacity: <span id="bgOpacityValue">0.6</span></label>
+                  <input type="range" id="bgOpacity" min="0" max="1" step="0.05" value="0.6">
+                </div>
+
+                <!-- Text Effects -->
+                <h3 class="section-title">Text Effects</h3>
+                <div class="input-row">
+                  <label>Text Shadow</label>
+                  <select id="textShadow">
+                    <option value="none">None</option>
+                    <option value="0 2px 4px rgba(0,0,0,0.8)">Soft Drop</option>
+                    <option value="0 2px 10px rgba(0,0,0,0.9)">Heavy Drop</option>
+                    <option value="0 0 10px currentColor, 0 0 20px currentColor">Neon Glow</option>
+                    <option value="0 0 10px #22d3ee, 0 0 40px #22d3ee, 0 0 80px #22d3ee">Cyan Glow</option>
+                    <option value="0 0 10px #f472b6, 0 0 40px #f472b6, 0 0 80px #f472b6">Pink Glow</option>
+                    <option value="0 0 10px #4ade80, 0 0 40px #4ade80">Green Glow</option>
+                    <option value="2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000">Hard Outline</option>
+                    <option value="1px 1px 2px rgba(0,0,0,0.5), 0 0 15px rgba(99,102,241,0.7)">Purple Aura</option>
+                    <option value="3px 3px 0 rgba(0,0,0,0.3)">Retro 3D</option>
+                  </select>
+                </div>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Text Stroke</label>
+                    <select id="textStroke">
+                      <option value="0">None</option>
+                      <option value="1">Thin (1px)</option>
+                      <option value="2">Medium (2px)</option>
+                      <option value="3">Thick (3px)</option>
+                      <option value="4">Heavy (4px)</option>
+                    </select>
+                  </div>
+                  <div class="input-row">
+                    <label>Stroke Color</label>
+                    <input type="color" id="strokeColor" value="#000000">
+                  </div>
+                </div>
+
+                <!-- Caption Box -->
+                <h3 class="section-title">Caption Box</h3>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Radius: <span id="borderRadiusValue">8</span>px</label>
+                    <input type="range" id="borderRadius" min="0" max="30" step="1" value="8">
+                  </div>
+                  <div class="input-row">
+                    <label>Padding: <span id="captionPaddingValue">10</span>px</label>
+                    <input type="range" id="captionPadding" min="0" max="40" step="2" value="10">
+                  </div>
+                </div>
+                <div class="input-row">
+                  <label>Max Width: <span id="maxWidthValue">80</span>%</label>
+                  <input type="range" id="captionMaxWidth" min="30" max="100" step="5" value="80">
+                </div>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Box Border</label>
+                    <select id="boxBorder">
+                      <option value="none">None</option>
+                      <option value="1px solid rgba(255,255,255,0.3)">Thin White</option>
+                      <option value="2px solid rgba(255,255,255,0.5)">Medium White</option>
+                      <option value="2px solid #6366f1">Purple</option>
+                      <option value="2px solid #22d3ee">Cyan</option>
+                      <option value="2px solid #f472b6">Pink</option>
+                      <option value="2px solid #fbbf24">Gold</option>
+                    </select>
+                  </div>
+                  <div class="input-row">
+                    <label>Box Shadow</label>
+                    <select id="boxShadow">
+                      <option value="none">None</option>
+                      <option value="0 4px 15px rgba(0,0,0,0.4)">Soft</option>
+                      <option value="0 8px 32px rgba(0,0,0,0.6)">Deep</option>
+                      <option value="0 0 20px rgba(99,102,241,0.4)">Purple Glow</option>
+                      <option value="0 0 20px rgba(34,211,238,0.4)">Cyan Glow</option>
+                      <option value="0 0 20px rgba(244,114,182,0.4)">Pink Glow</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== TAB: MOTION (Animation + Layout) ===== -->
+            <div class="tab-panel" id="tab-motion">
+              <div class="section-group">
+                <h3 class="section-title">Caption Mode</h3>
+                <div class="input-row">
+                  <label>Display Style</label>
+                  <select id="captionMode">
+                    <option value="sentence">Full Sentence</option>
+                    <option value="word" selected>Word-by-Word</option>
+                    <option value="highlight">Sentence + Highlight</option>
+                  </select>
+                  <span class="text-muted" style="font-size: 0.7rem; margin-top: 2px;">
+                    Word-by-Word shows each word as it's spoken. Highlight shows the full sentence with the active word highlighted.
+                  </span>
+                </div>
+
+                <h3 class="section-title">Position</h3>
+                <div class="two-col">
+                  <div class="input-row">
+                    <label>Vertical</label>
+                    <select id="vPos">
+                      <option value="top">Top</option>
+                      <option value="center">Center</option>
+                      <option value="bottom" selected>Bottom</option>
+                    </select>
+                  </div>
+                  <div class="input-row">
+                    <label>Horizontal</label>
+                    <select id="hPos">
+                      <option value="left">Left</option>
+                      <option value="center" selected>Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                <h3 class="section-title">Transition</h3>
+                <div class="input-row">
+                  <label>Animation Type</label>
+                  <select id="animType">
+                    <option value="none">None</option>
+                    <option value="fade" selected>Fade</option>
+                    <option value="slide">Slide Left</option>
+                    <option value="slideUp">Slide Up</option>
+                    <option value="slideDown">Slide Down</option>
+                    <option value="pop">Pop</option>
+                    <option value="typewriter">Typewriter</option>
+                    <option value="blur">Blur Fade</option>
+                    <option value="scale">Scale Up</option>
+                    <option value="flip">Flip</option>
+                    <option value="bounce">Bounce In</option>
+                    <option value="glitch">Glitch</option>
+                    <option value="wave">Word Wave</option>
+                  </select>
+                </div>
+                <div class="input-row">
+                  <label>Speed: <span id="animSpeedValue">1.0</span>x</label>
+                  <input type="range" id="animSpeed" min="0.2" max="3" step="0.1" value="1">
+                </div>
+
+                <h3 class="section-title">Highlight</h3>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="wordHighlight">
+                  <span>Word-by-Word Highlight</span>
+                </label>
+                <div id="highlightColorRow" class="input-row" style="display:none;">
+                  <label>Highlight Color</label>
+                  <input type="color" id="highlightColor" value="#fbbf24">
+                </div>
+              </div>
+            </div> <!-- end of tab-motion -->
+
+            <!-- ===== TAB: TRANSCRIPT (Edit) ===== -->
+            <div class="tab-panel" id="tab-transcript">
+              <div class="section-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <h3 class="section-title" style="margin: 0; border: none; padding: 0;">Transcript Editor</h3>
+                  <span class="text-muted" style="font-size: 0.75rem;">Changes update automatically</span>
+                </div>
+                <div id="transcriptList" class="transcript-list">
+                  <div class="text-muted" style="text-align: center; padding: 2rem 0; font-size: 0.85rem;">
+                    Generate captions first to see them here.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /.tab-content-wrapper -->
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
