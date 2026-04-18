@@ -437,8 +437,9 @@ function setupDragDrop() {
     }
   });
 
-  // Also make the upload area clickable
-  uploadContainer.addEventListener('click', () => {
+  // Also make the upload area clickable, but ignore clicks on the button to prevent duplicate popups
+  uploadContainer.addEventListener('click', (e) => {
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
     videoUpload.click();
   });
 }
@@ -1706,7 +1707,7 @@ async function startBurnInExport() {
     processingStatus.style.display = 'none';
   };
 
-  // 2. Playback at normal speed, muted to avoid audio desync
+  // 2. Playback at normal speed, muted so user doesn't hear echo/desync during recording
   video.currentTime = 0;
   video.muted = true;
   video.pause();
@@ -1769,20 +1770,32 @@ function snapshotCaptionLayout(canvas) {
   return { relCenterX, relCenterY, scale, vPos, hPos };
 }
 
-// Convert WebM blob to MP4 using FFmpeg WASM
 async function convertWebmToMp4(webmBlob) {
   const ff = await getFFmpeg();
   
   const inputData = new Uint8Array(await webmBlob.arrayBuffer());
   await ff.writeFile('input.webm', inputData);
   
-  // Convert webm to mp4 with H.264 (using libx264 if available, otherwise copy)
-  // FFmpeg WASM doesn't have libx264, so we use copy codec for speed
+  // Get original audio
+  // Check if currentVideoFile exists, it shouldn't be null but just in case
+  if (currentVideoFile) {
+    await ff.writeFile('original.mp4', await fetchFile(currentVideoFile));
+  } else {
+    // If somehow missing, just make an empty placeholder
+    await ff.writeFile('original.mp4', new Uint8Array());
+  }
+  
+  // Convert webm to mp4, mapping canvas video and original audio
   await ff.exec([
     '-i', 'input.webm',
+    '-i', 'original.mp4',
+    '-map', '0:v:0',    // Take video stream exclusively from the recorded WebM canvas
+    '-map', '1:a:0?',   // Take audio stream exclusively from the original file (the ? makes it optional)
     '-c:v', 'copy',
-    '-an',           // no audio for now since we recorded video-only
+    '-c:a', 'aac',
+    '-strict', 'experimental',
     '-movflags', '+faststart',
+    '-shortest',        // Cut off if one stream is slightly longer than the other
     'output.mp4'
   ]);
   
@@ -1790,6 +1803,7 @@ async function convertWebmToMp4(webmBlob) {
   
   // Cleanup
   await ff.deleteFile('input.webm');
+  await ff.deleteFile('original.mp4');
   await ff.deleteFile('output.mp4');
   
   return new Blob([mp4Data.buffer], { type: 'video/mp4' });
