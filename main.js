@@ -104,6 +104,16 @@ let currentWordIndex = -1;
 let currentTextTransform = 'none';
 let currentFontStyle = 'normal';
 
+// --- Web Audio API State ---
+let audioContext = null;
+let sourceNode = null;
+let gainNode = null;
+let bassEQ = null;
+let midEQ = null;
+let trebleEQ = null;
+let compressorNode = null;
+let audioEngineReady = false;
+
 // --- Style Presets ---
 const STYLE_PRESETS = {
   default: {
@@ -283,6 +293,7 @@ function init() {
   setupSegmentedControls();
   setupColorSwatches();
   setupKeyboardShortcuts();
+  setupAudioControls();
   applySettingsToPreview(); // Initial sync
   // Default: let clicks pass through to video controls
   captionContainer.style.pointerEvents = 'none';
@@ -652,6 +663,214 @@ function toggleShortcutsPanel() {
     panel.style.display = 'none';
   }
 }
+
+// --- Audio Engine ---
+const AUDIO_PRESETS = {
+  default: { volume: 100, bass: 0, mid: 0, treble: 0, threshold: -24, ratio: 4, attack: 0.003, release: 0.25, speed: 1 },
+  podcast: { volume: 120, bass: 3, mid: 2, treble: -1, threshold: -20, ratio: 6, attack: 0.003, release: 0.25, speed: 1 },
+  music: { volume: 100, bass: 4, mid: 0, treble: 3, threshold: -30, ratio: 2, attack: 0.01, release: 0.3, speed: 1 },
+  voiceover: { volume: 130, bass: -2, mid: 4, treble: 1, threshold: -18, ratio: 8, attack: 0.002, release: 0.2, speed: 1 },
+  cinema: { volume: 110, bass: 5, mid: -1, treble: 2, threshold: -25, ratio: 4, attack: 0.005, release: 0.35, speed: 1 },
+};
+
+function initAudioEngine() {
+  if (audioEngineReady) return; // Already initialized
+
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Create source from the video element
+    sourceNode = audioContext.createMediaElementSource(mainVideo);
+
+    // Gain (Volume)
+    gainNode = audioContext.createGain();
+    gainNode.gain.value = 1.0;
+
+    // 3-Band EQ using BiquadFilterNodes
+    bassEQ = audioContext.createBiquadFilter();
+    bassEQ.type = 'lowshelf';
+    bassEQ.frequency.value = 200;
+    bassEQ.gain.value = 0;
+
+    midEQ = audioContext.createBiquadFilter();
+    midEQ.type = 'peaking';
+    midEQ.frequency.value = 1000;
+    midEQ.Q.value = 0.5;
+    midEQ.gain.value = 0;
+
+    trebleEQ = audioContext.createBiquadFilter();
+    trebleEQ.type = 'highshelf';
+    trebleEQ.frequency.value = 3000;
+    trebleEQ.gain.value = 0;
+
+    // Dynamics Compressor
+    compressorNode = audioContext.createDynamicsCompressor();
+    compressorNode.threshold.value = -24;
+    compressorNode.knee.value = 30;
+    compressorNode.ratio.value = 4;
+    compressorNode.attack.value = 0.003;
+    compressorNode.release.value = 0.25;
+
+    // Signal Chain: source → gain → bass → mid → treble → compressor → destination
+    sourceNode.connect(gainNode);
+    gainNode.connect(bassEQ);
+    bassEQ.connect(midEQ);
+    midEQ.connect(trebleEQ);
+    trebleEQ.connect(compressorNode);
+    compressorNode.connect(audioContext.destination);
+
+    audioEngineReady = true;
+    console.log('Audio Engine initialized.');
+  } catch (err) {
+    console.error('Failed to initialize Audio Engine:', err);
+  }
+}
+
+function updateEQVisualizer() {
+  const bassVal = parseInt(document.getElementById('eqBass')?.value || 0);
+  const midVal = parseInt(document.getElementById('eqMid')?.value || 0);
+  const trebleVal = parseInt(document.getElementById('eqTreble')?.value || 0);
+
+  const bassPct = Math.max(5, ((bassVal + 12) / 24) * 100);
+  const midPct = Math.max(5, ((midVal + 12) / 24) * 100);
+  const treblePct = Math.max(5, ((trebleVal + 12) / 24) * 100);
+
+  const bars = document.querySelectorAll('.eq-bar');
+  if (bars[0]) bars[0].style.height = bassPct + '%';
+  if (bars[1]) bars[1].style.height = midPct + '%';
+  if (bars[2]) bars[2].style.height = treblePct + '%';
+}
+
+function applyAudioPreset(presetName) {
+  const preset = AUDIO_PRESETS[presetName];
+  if (!preset) return;
+
+  const ids = {
+    audioVolume: preset.volume,
+    eqBass: preset.bass,
+    eqMid: preset.mid,
+    eqTreble: preset.treble,
+    compThreshold: preset.threshold,
+    compRatio: preset.ratio,
+    compAttack: preset.attack,
+    compRelease: preset.release,
+    playbackSpeed: preset.speed,
+  };
+
+  for (const [id, val] of Object.entries(ids)) {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
+
+  // Update all value labels
+  updateAudioLabels();
+  // Apply to audio engine
+  syncAudioEngine();
+  updateEQVisualizer();
+}
+
+function updateAudioLabels() {
+  const labelMap = {
+    audioVolume: 'audioVolumeValue',
+    eqBass: 'eqBassValue',
+    eqMid: 'eqMidValue',
+    eqTreble: 'eqTrebleValue',
+    compThreshold: 'compThresholdValue',
+    compRatio: 'compRatioValue',
+    compAttack: 'compAttackValue',
+    compRelease: 'compReleaseValue',
+    playbackSpeed: 'playbackSpeedValue',
+  };
+
+  for (const [inputId, labelId] of Object.entries(labelMap)) {
+    const input = document.getElementById(inputId);
+    const label = document.getElementById(labelId);
+    if (input && label) label.textContent = input.value;
+  }
+}
+
+function syncAudioEngine() {
+  // Initialize audio engine on first interaction (browser autoplay policy requires user gesture)
+  if (!audioEngineReady) initAudioEngine();
+  if (!audioEngineReady) return;
+
+  // Resume context if suspended (autoplay policy)
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+
+  // Volume
+  const vol = parseFloat(document.getElementById('audioVolume')?.value || 100) / 100;
+  gainNode.gain.setTargetAtTime(vol, audioContext.currentTime, 0.02);
+
+  // EQ
+  const bass = parseFloat(document.getElementById('eqBass')?.value || 0);
+  const mid = parseFloat(document.getElementById('eqMid')?.value || 0);
+  const treble = parseFloat(document.getElementById('eqTreble')?.value || 0);
+  bassEQ.gain.setTargetAtTime(bass, audioContext.currentTime, 0.02);
+  midEQ.gain.setTargetAtTime(mid, audioContext.currentTime, 0.02);
+  trebleEQ.gain.setTargetAtTime(treble, audioContext.currentTime, 0.02);
+
+  // Compressor
+  const threshold = parseFloat(document.getElementById('compThreshold')?.value || -24);
+  const ratio = parseFloat(document.getElementById('compRatio')?.value || 4);
+  const attack = parseFloat(document.getElementById('compAttack')?.value || 0.003);
+  const release = parseFloat(document.getElementById('compRelease')?.value || 0.25);
+  compressorNode.threshold.setTargetAtTime(threshold, audioContext.currentTime, 0.02);
+  compressorNode.ratio.setTargetAtTime(ratio, audioContext.currentTime, 0.02);
+  compressorNode.attack.setTargetAtTime(attack, audioContext.currentTime, 0.02);
+  compressorNode.release.setTargetAtTime(release, audioContext.currentTime, 0.02);
+
+  // Playback Speed
+  const speed = parseFloat(document.getElementById('playbackSpeed')?.value || 1);
+  mainVideo.playbackRate = speed;
+  mainVideo.preservesPitchForPlaybackRate = document.getElementById('preservePitch')?.checked ?? true;
+}
+
+function setupAudioControls() {
+  // Bind all audio sliders
+  const audioControlIds = [
+    'audioVolume', 'eqBass', 'eqMid', 'eqTreble',
+    'compThreshold', 'compRatio', 'compAttack', 'compRelease',
+    'playbackSpeed'
+  ];
+
+  audioControlIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', () => {
+        updateAudioLabels();
+        syncAudioEngine();
+        updateEQVisualizer();
+      });
+    }
+  });
+
+  // Preserve pitch checkbox
+  const pitchCheckbox = document.getElementById('preservePitch');
+  if (pitchCheckbox) {
+    pitchCheckbox.addEventListener('change', () => syncAudioEngine());
+  }
+
+  // Audio preset chips
+  document.querySelectorAll('.audio-preset-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.audio-preset-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      applyAudioPreset(chip.dataset.audioPreset);
+      notyf.info(`Audio preset: ${chip.textContent}`);
+    });
+  });
+
+  // Initialize audio engine on first video play (satisfies browser autoplay policy)
+  mainVideo.addEventListener('play', () => {
+    if (!audioEngineReady) {
+      initAudioEngine();
+      syncAudioEngine();
+    }
+  }, { once: true });
+}
+
 
 function setupCaptionInteractions() {
   // Editing
@@ -1663,15 +1882,39 @@ async function startBurnInExport() {
   processingStatus.style.display = 'block';
   updateProgress(5, "Preparing export...");
   
-  const stream = canvas.captureStream(30);
+  const canvasStream = canvas.captureStream(30);
   
-  // Try VP9 first, fallback to VP8
-  let mimeType = 'video/webm;codecs=vp9';
+  // Capture processed audio from the Web Audio API if engine is active
+  let combinedStream;
+  let audioDestination = null;
+  let hasProcessedAudio = false;
+
+  if (audioEngineReady && audioContext && compressorNode) {
+    try {
+      audioDestination = audioContext.createMediaStreamDestination();
+      // Tap the end of our signal chain (compressor) → export destination
+      compressorNode.connect(audioDestination);
+      
+      combinedStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks()
+      ]);
+      hasProcessedAudio = true;
+    } catch (e) {
+      console.warn('Could not capture processed audio, will use original:', e);
+      combinedStream = canvasStream;
+    }
+  } else {
+    combinedStream = canvasStream;
+  }
+  
+  // Try VP9+Opus first, fallback
+  let mimeType = hasProcessedAudio ? 'video/webm;codecs=vp9,opus' : 'video/webm;codecs=vp9';
   if (!MediaRecorder.isTypeSupported(mimeType)) {
-    mimeType = 'video/webm;codecs=vp8';
+    mimeType = hasProcessedAudio ? 'video/webm;codecs=vp8,opus' : 'video/webm;codecs=vp8';
   }
 
-  const recorder = new MediaRecorder(stream, { 
+  const recorder = new MediaRecorder(combinedStream, { 
     mimeType,
     videoBitsPerSecond: 8000000
   });
@@ -1680,11 +1923,16 @@ async function startBurnInExport() {
   recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
   
   recorder.onstop = async () => {
+    // Disconnect the export tap to avoid double-routing audio
+    if (audioDestination && compressorNode) {
+      try { compressorNode.disconnect(audioDestination); } catch(e) {}
+    }
+
     const webmBlob = new Blob(chunks, { type: 'video/webm' });
     updateProgress(70, "Converting to MP4 with FFmpeg...");
     
     try {
-      const mp4Blob = await convertWebmToMp4(webmBlob);
+      const mp4Blob = await convertWebmToMp4(webmBlob, hasProcessedAudio);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(mp4Blob);
       a.download = 'captioned-video.mp4';
@@ -1707,9 +1955,10 @@ async function startBurnInExport() {
     processingStatus.style.display = 'none';
   };
 
-  // 2. Playback at normal speed, muted so user doesn't hear echo/desync during recording
+  // 2. Playback — unmuted so the Web Audio API processes audio for capture
   video.currentTime = 0;
-  video.muted = true;
+  video.muted = false;
+  video.volume = hasProcessedAudio ? 0.0 : 0; // AudioContext captures regardless of muted state
   video.pause();
   
   recorder.start(100); // Collect data every 100ms
@@ -1770,40 +2019,50 @@ function snapshotCaptionLayout(canvas) {
   return { relCenterX, relCenterY, scale, vPos, hPos };
 }
 
-async function convertWebmToMp4(webmBlob) {
+async function convertWebmToMp4(webmBlob, hasProcessedAudio = false) {
   const ff = await getFFmpeg();
   
   const inputData = new Uint8Array(await webmBlob.arrayBuffer());
   await ff.writeFile('input.webm', inputData);
   
-  // Get original audio
-  // Check if currentVideoFile exists, it shouldn't be null but just in case
-  if (currentVideoFile) {
-    await ff.writeFile('original.mp4', await fetchFile(currentVideoFile));
+  if (hasProcessedAudio) {
+    // Audio effects were already captured in the WebM stream — just remux
+    await ff.exec([
+      '-i', 'input.webm',
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-strict', 'experimental',
+      '-movflags', '+faststart',
+      'output.mp4'
+    ]);
   } else {
-    // If somehow missing, just make an empty placeholder
-    await ff.writeFile('original.mp4', new Uint8Array());
+    // No processed audio — mux original file's audio track
+    if (currentVideoFile) {
+      await ff.writeFile('original.mp4', await fetchFile(currentVideoFile));
+    } else {
+      await ff.writeFile('original.mp4', new Uint8Array());
+    }
+    
+    await ff.exec([
+      '-i', 'input.webm',
+      '-i', 'original.mp4',
+      '-map', '0:v:0',
+      '-map', '1:a:0?',
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-strict', 'experimental',
+      '-movflags', '+faststart',
+      '-shortest',
+      'output.mp4'
+    ]);
+    
+    try { await ff.deleteFile('original.mp4'); } catch(e) {}
   }
-  
-  // Convert webm to mp4, mapping canvas video and original audio
-  await ff.exec([
-    '-i', 'input.webm',
-    '-i', 'original.mp4',
-    '-map', '0:v:0',    // Take video stream exclusively from the recorded WebM canvas
-    '-map', '1:a:0?',   // Take audio stream exclusively from the original file (the ? makes it optional)
-    '-c:v', 'copy',
-    '-c:a', 'aac',
-    '-strict', 'experimental',
-    '-movflags', '+faststart',
-    '-shortest',        // Cut off if one stream is slightly longer than the other
-    'output.mp4'
-  ]);
   
   const mp4Data = await ff.readFile('output.mp4');
   
   // Cleanup
   await ff.deleteFile('input.webm');
-  await ff.deleteFile('original.mp4');
   await ff.deleteFile('output.mp4');
   
   return new Blob([mp4Data.buffer], { type: 'video/mp4' });
